@@ -1,0 +1,280 @@
+version:  "3.9"
+
+services:
+
+  #Infrastructure
+  mongodb:
+    image: "mongo:latest"
+    container_name: mongodb
+    ports:
+      - "27018:27017"
+    networks:
+      - mired
+  zookeeper:
+    image: "wurstmeister/zookeeper"
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - mired
+  kafka:
+    image: "wurstmeister/kafka"
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: 127.0.0.1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CREATE_TOPICS: "operation_topic:1:3,reversion_topic:1:3"
+    networks:
+      - mired
+  redis:
+    image: "redis"
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - mired
+  mongodb2:
+    image: "mongo:latest"
+    command: mongod --port 27018
+    container_name: mongodb2
+    ports:
+      - "27019:27018"
+    networks:
+      - mired
+
+  #Services
+  discovery-service:
+    image: "discovery-service:latest"
+    build:
+      context: /discovery-service/.
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+    networks:
+      - mired
+  config-service:
+    image: "config-service:latest"
+    build:
+      context: /config-service/.
+    container_name: config-service
+    ports:
+      - "8888:8888"
+    networks:
+      - mired
+  gateway-service:
+    image: "gateway-service:latest"
+    build:
+      context: /gateway-service/.
+    container_name: gateway-service
+    environment:
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "8080:8080"
+    networks:
+      - mired
+
+  #Microservices
+  customer-microservice:
+    image: "customer-microservice:latest"
+    build:
+      context: /customer-microservice/.
+    container_name: customer-microservice
+    depends_on:
+      - mongodb
+      - discovery-service
+      - config-service
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50001:50001"
+    networks:
+      - mired
+  product-microservice:
+    image: "product-microservice:latest"
+    build:
+      context: /product-microservice/.
+    container_name: product-microservice
+    depends_on:
+      - mongodb
+      - discovery-service
+      - config-service
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50002:50002"
+    networks:
+      - mired
+  account-microservice:
+    image: "account-microservice:latest"
+    build:
+      context: /account-microservice/.
+    container_name: account-microservice
+    depends_on:
+      - mongodb
+      - discovery-service
+      - config-service
+      - customer-microservice
+      - product-microservice
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50003:50003"
+    networks:
+      - mired
+  movement-microservice:
+    image: "movement-microservice:latest"
+    build:
+      context: /movement-microservice/.
+    container_name: movement-microservice
+    depends_on:
+      - mongodb
+      - discovery-service
+      - config-service
+      - account-microservice
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50004:50004"
+    networks:
+      - mired
+  consumption-microservice:
+    image: "consumption-microservice:latest"
+    build:
+      context: /consumption-microservice/.
+    container_name: consumption-microservice
+    depends_on:
+      - mongodb
+      - discovery-service
+      - config-service
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50007:50007"
+    networks:
+      - mired
+  transaction-microservice:
+    image: "transaction-microservice:latest"
+    build:
+      context: /transaction-microservice/.
+    container_name: transaction-microservice
+    depends_on:
+      - discovery-service
+      - config-service
+      - product-microservice
+      - account-microservice
+      - movement-microservice
+      - consumption-microservice
+      - payment-microservice
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50005:50005"
+    networks:
+      - mired
+  card-microservice:
+    image: "card-microservice:latest"
+    build:
+      context: /card-microservice/.
+    container_name: card-microservice
+    depends_on:
+      - mongodb
+      - discovery-service
+      - config-service
+      - customer-microservice
+      - product-microservice
+      - account-microservice
+      - transaction-microservice
+      - consumption-microservice
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50006:50006"
+    networks:
+      - mired
+  payment-microservice:
+    image: "payment-microservice:latest"
+    build:
+      context: /payment-microservice/.
+    container_name: payment-microservice
+    depends_on:
+      - mongodb
+      - discovery-service
+      - config-service
+      - consumption-microservice
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+    ports:
+      - "50008:50008"
+    networks:
+      - mired
+  wallet-microservice:
+    image: "wallet-microservice:latest"
+    build:
+      context: /wallet-microservice/.
+    container_name: wallet-microservice
+    depends_on:
+      - mongodb2
+      - discovery-service
+      - config-service
+      - kafka
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+      - spring.kafka.bootstrap-servers=kafka:9092
+    ports:
+      - "50009:50009"
+    networks:
+      - mired
+  swap-microservice:
+    image: "swap-microservice:latest"
+    build:
+      context: /swap-microservice/.
+    container_name: swap-microservice
+    depends_on:
+      - mongodb2
+      - discovery-service
+      - config-service
+      - kafka
+      - wallet-microservice
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+      - spring.kafka.bootstrap-servers=kafka:9092
+    ports:
+      - "50010:50010"
+    networks:
+      - mired
+  trade-microservice:
+    image: "trade-microservice:latest"
+    build:
+      context: /trade-microservice/.
+    container_name: trade-microservice
+    depends_on:
+      - mongodb2
+      - discovery-service
+      - config-service
+      - kafka
+      - swap-microservice
+    environment:
+      - spring.cloud.config.uri=http://config-service:8888
+      - eureka.client.service-url.defaultZone=http://discovery-service:8761/eureka/
+      - spring.kafka.bootstrap-servers=kafka:9092
+    ports:
+      - "50012:50012"
+    networks:
+      - mired
+networks:
+  mired:
+    external: true
